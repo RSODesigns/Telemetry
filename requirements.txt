@@ -1,0 +1,32 @@
+# ============================================================================
+#  Lotus Elise Digital Dashboard - Python Dependencies
+# ============================================================================
+#
+#  Target platform : Raspberry Pi 5 (Debian Bookworm / Raspberry Pi OS 64-bit)
+#  Python          : 3.9+  (tested on 3.11 / 3.13)
+#
+#  Install everything with:
+#       python -m pip install -r requirements.txt
+#
+#  On Raspberry Pi OS, PyQt5 is usually pre-built and best installed from apt
+#  to get the hardware-accelerated Qt platform plugins:
+#       sudo apt update
+#       sudo apt install python3-pyqt5 python3-pyqt5.qtsvg
+#  ...and then only `python-obd` needs to come from pip.
+# ----------------------------------------------------------------------------
+
+# GUI toolkit - provides QtWidgets, QThread, pyqtSignal and QPainter used to
+# draw the hardware-accelerated vector gauges.
+PyQt5>=5.15.9
+
+# OBD-II / ELM327 communication library. Talks to the USB adapter over a
+# serial (pyserial) transport, decodes the raw PID responses into Pint
+# quantities, and exposes obd.commands.RPM / COOLANT_TEMP / SPEED etc.
+obd>=0.7.1
+
+# pyserial is a hard dependency of `obd`; it is pinned explicitly so that a
+# minimal / offline image still resolves the serial transport correctly.
+pyserial>=3.5
+
+
+# To run on Windows: python main.py --mock --windowed
