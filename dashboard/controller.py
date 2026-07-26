@@ -48,6 +48,10 @@ class DashboardController(QObject):
     speed_changed = pyqtSignal(object)        # float | None  (MPH, converted)
     throttle_changed = pyqtSignal(object)     # float | None  (%, 0-100)
     battery_changed = pyqtSignal(object)      # float | None  (volts)
+    intake_temp_changed = pyqtSignal(object)  # float | None  (deg C)
+    relative_throttle_changed = pyqtSignal(object) # float | None  (%, 0-100)
+    fuel_status_changed = pyqtSignal(object)  # tuple[str, str] | None
+    fuel_level_changed = pyqtSignal(object)   # float | None (%, 0-100)
     overheat_changed = pyqtSignal(bool)       # True while coolant is critical
     connection_changed = pyqtSignal(object)   # ConnectionState
     message = pyqtSignal(str)                 # diagnostics passthrough
@@ -102,6 +106,10 @@ class DashboardController(QObject):
         self.coolant_changed.emit(telemetry.coolant_c)
         self.throttle_changed.emit(telemetry.throttle_pct)
         self.battery_changed.emit(telemetry.battery_v)
+        self.intake_temp_changed.emit(telemetry.intake_temp_c)
+        self.relative_throttle_changed.emit(telemetry.relative_throttle_pct)
+        self.fuel_status_changed.emit(telemetry.fuel_status)
+        self.fuel_level_changed.emit(telemetry.fuel_level_pct)
 
         # 4) Speed: OBD-II gives km/h; convert to MPH for the readout.
         #    Speed_mph = Speed_kmh * 0.621371

@@ -185,6 +185,10 @@ class OBDModel(QThread):
                     # ignition-off / ECU-sleep windows and doubles as a link
                     # health signal.
                     battery_v=self._query_value(obd.commands.ELM_VOLTAGE),
+                    intake_temp_c=self._query_value(obd.commands.INTAKE_TEMP),
+                    relative_throttle_pct=self._query_value(obd.commands.RELATIVE_THROTTLE_POS),
+                    fuel_status=self._query_fuel_status(),
+                    fuel_level_pct=self._query_value(obd.commands.FUEL_LEVEL),
                 )
 
                 # A frame where every ECU-sourced PID failed is treated as
@@ -196,6 +200,10 @@ class OBDModel(QThread):
                     and snapshot.coolant_c is None
                     and snapshot.speed_kmh is None
                     and snapshot.throttle_pct is None
+                    and snapshot.intake_temp_c is None
+                    and snapshot.relative_throttle_pct is None
+                    and snapshot.fuel_status is None
+                    and snapshot.fuel_level_pct is None
                 )
                 if ecu_all_null:
                     consecutive_errors += 1
@@ -343,6 +351,19 @@ class OBDModel(QThread):
             # response.value is a Pint quantity; .magnitude is the raw number
             # in the command's native unit (RPM, degC for coolant, km/h speed).
             return float(response.value.magnitude)
+        except Exception:
+            return None
+
+    def _query_fuel_status(self) -> tuple[str, str] | None:
+        """Query FUEL_STATUS PID and return tuple of status strings, or None."""
+        try:
+            response = self._connection.query(obd.commands.FUEL_STATUS, force=True)
+            if response is None or response.is_null() or response.value is None:
+                return None
+            val = response.value
+            if isinstance(val, tuple):
+                return (str(val[0]) if len(val) > 0 else "", str(val[1]) if len(val) > 1 else "")
+            return (str(val), "")
         except Exception:
             return None
 

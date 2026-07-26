@@ -9,10 +9,8 @@ drawn entirely with :class:`QPainter` vector primitives, styled as an elevated
 Colour logic (from the UX spec)
 -------------------------------
 * **Blue**  - below 70 C (engine still cold / warming up)
-* **Green** - 70-95 C (healthy operating band)
-* **Amber** - 95-98 C (transitional caution band, rising toward danger)
-* **Flashing red** - above 98 C (overheating) - the column and readout blink,
-  and the window paints its full-screen "ENGINE OVERHEATING" overlay.
+* **Green** - 70-90 C (healthy operating band)
+* **Red**   - 90 C and above (overheating danger zone)
 
 Coordinate mapping
 ------------------
@@ -34,6 +32,10 @@ from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen
 from .. import config
 from .base_gauge import BaseGauge
 
+# General-dashboard coolant zone colours (distinct from the track theme).
+_COOLANT_GREEN = "#30b860"         # healthy operating band (70-90 C)
+_COOLANT_ZONE_HOT_C = 90.0        # >= 90 C => red
+
 
 class CoolantGauge(BaseGauge):
     """Vertical bar gauge for engine coolant temperature (deg C)."""
@@ -52,12 +54,10 @@ class CoolantGauge(BaseGauge):
     # ------------------------------------------------------------------ #
     def _zone_color(self, temp: float) -> QColor:
         if temp < config.COOLANT_COLD_MAX_C:
-            return self.color(config.COLOR_COLD)          # blue
-        if temp <= config.COOLANT_OPTIMAL_MAX_C:
-            return self.color(config.COLOR_OPTIMAL)       # green
-        if temp <= config.COOLANT_CRITICAL_C:
-            return self.color(config.COLOR_AMBER)         # amber caution
-        return self.color(config.COLOR_CRITICAL)          # red overheating
+            return self.color(config.COLOR_COLD)          # blue  (< 70 C)
+        if temp < _COOLANT_ZONE_HOT_C:
+            return self.color(_COOLANT_GREEN)              # green (70-90 C)
+        return self.color(config.COLOR_CRITICAL)           # red   (>= 90 C)
 
     # ------------------------------------------------------------------ #
     # Rendering

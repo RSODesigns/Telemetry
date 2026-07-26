@@ -75,6 +75,8 @@ class MockEngine:
         # centre the mock there and let it drift slightly so the readout
         # visibly flickers instead of showing a flat, obviously-fake value.
         self._battery: float = 14.1
+        self._intake_temp: float = config.MOCK_AMBIENT_TEMP_C + 5.0
+        self._fuel_level: float = 65.0
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -85,12 +87,34 @@ class MockEngine:
         self._advance_coolant(dt)
         self._advance_throttle(dt)
         self._advance_battery(dt)
+        self._advance_intake_temp(dt)
+
+        # Slowly consume fuel during the mock session
+        self._fuel_level = max(5.0, self._fuel_level - dt * 0.01)
+
+        idle = config.THROTTLE_IDLE_STOP_PCT
+        span = config.THROTTLE_MAX_PCT - idle
+        rel_throttle = 0.0 if self._throttle <= idle else min(100.0, (self._throttle - idle) / span * 100.0)
+
+        if self._coolant < 60.0:
+            f_stat = ("Open loop due to insufficient engine temperature", "")
+        elif self._state is _DriveState.ACCELERATE and self._throttle > 60.0:
+            f_stat = ("Open loop due to engine load OR fuel cut due to deceleration", "")
+        elif self._state is _DriveState.DECELERATE and self._throttle <= idle:
+            f_stat = ("Open loop due to engine load OR fuel cut due to deceleration", "")
+        else:
+            f_stat = ("Closed loop, using oxygen sensor feedback to determine fuel mix", "")
+
         return Telemetry(
             rpm=round(self._rpm),
             coolant_c=round(self._coolant, 1),
             speed_kmh=round(self._speed_kmh, 1),
             throttle_pct=round(self._throttle, 1),
             battery_v=round(self._battery, 2),
+            intake_temp_c=round(self._intake_temp, 1),
+            relative_throttle_pct=round(rel_throttle, 1),
+            fuel_status=f_stat,
+            fuel_level_pct=round(self._fuel_level, 1),
         )
 
     # ------------------------------------------------------------------ #
@@ -224,6 +248,18 @@ class MockEngine:
         # Hard-clamp to a plausible envelope so the widget never divides by
         # weirdness.
         self._battery = max(9.0, min(16.0, self._battery))
+
+    # ------------------------------------------------------------------ #
+    # Internal: intake air temperature
+    # ------------------------------------------------------------------ #
+    def _advance_intake_temp(self, dt: float) -> None:
+        """Intake temperature tracks engine warm-up and load heat soak."""
+        target = config.MOCK_AMBIENT_TEMP_C + 10.0 + (self._coolant - config.MOCK_AMBIENT_TEMP_C) * 0.25
+        if self._state is _DriveState.ACCELERATE:
+            target += 3.0
+        self._intake_temp = self._ease(self._intake_temp, target, dt, tau=15.0)
+        self._intake_temp += random.uniform(-0.1, 0.1)
+        self._intake_temp = max(config.INTAKE_MIN_C, min(config.INTAKE_MAX_C, self._intake_temp))
 
     # ------------------------------------------------------------------ #
     # Helper

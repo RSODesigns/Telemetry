@@ -61,3 +61,7 @@ class Telemetry:
     speed_kmh: float | None = None
     throttle_pct: float | None = None
     battery_v: float | None = None
+    intake_temp_c: float | None = None
+    relative_throttle_pct: float | None = None
+    fuel_status: tuple[str, str] | None = None
+    fuel_level_pct: float | None = None

@@ -44,39 +44,39 @@ UI_POLL_HZ: float = 30.0
 UI_POLL_INTERVAL_MS: int = max(1, round(1000 / UI_POLL_HZ))  # ~33 ms
 
 # ---------------------------------------------------------------------------
-# Colour palette - "carbon + neon" instrument theme
+# Colour palette - "Racing Red / Black / White" instrument theme
 # ---------------------------------------------------------------------------
-# The canvas is a dark, slightly blue-tinted charcoal with a soft central
-# vignette (BG_TOP in the middle fading to BG_EDGE at the corners) so the whole
-# panel reads with a bit of depth rather than a flat black.
-COLOR_BG_TOP = "#1a1e25"       # vignette centre (lifted charcoal)
-COLOR_BG_EDGE = "#0a0b0e"      # vignette edges (near black)
-COLOR_BACKGROUND = "#0e0f13"   # base flat fill / fallback
+# Deep warm-black canvas with a subtle dark-crimson vignette centre so the
+# whole panel reads as a cockpit instrument, not a consumer infotainment screen.
+COLOR_BG_TOP = "#1a1012"       # vignette centre (warm black, hint of crimson)
+COLOR_BG_EDGE = "#0a0607"      # vignette edges (near pure black)
+COLOR_BACKGROUND = "#0e0a0a"   # base flat fill / fallback
 
 # Each gauge sits on an elevated rounded "card" with a hairline border.
-COLOR_CARD_TOP = "#1d222a"     # card fill, top of its gradient
-COLOR_CARD_BOTTOM = "#141820"  # card fill, bottom of its gradient
-COLOR_CARD_BORDER = "#2f3540"  # hairline border around the card
-COLOR_CARD_HILITE = "#3a424f"  # faint top inner highlight line
+# (Used by the General layout; Track layout uses card-free SidePanels.)
+COLOR_CARD_TOP = "#1d1518"     # card fill, top of its gradient
+COLOR_CARD_BOTTOM = "#141012"  # card fill, bottom of its gradient
+COLOR_CARD_BORDER = "#3a2228"  # hairline border around the card
+COLOR_CARD_HILITE = "#4a2a32"  # faint top inner highlight line
 
-COLOR_PANEL = "#191d24"        # neutral fill (e.g. an unlit shift LED)
-COLOR_TRACK = "#262b34"        # unfilled portion of an arc/bar
+COLOR_PANEL = "#1a1214"        # neutral fill (e.g. an unlit shift LED)
+COLOR_TRACK = "#2a1c20"        # unfilled portion of an arc/bar
 
-COLOR_TEXT = "#f3f6fc"         # primary readouts
-COLOR_TEXT_DIM = "#828a98"     # labels, units, secondary info
-COLOR_TEXT_FAINT = "#4c535f"   # minor ticks, disabled text
+COLOR_TEXT = "#f5f0f0"         # primary readouts (warm white)
+COLOR_TEXT_DIM = "#8a7e80"     # labels, units, secondary info
+COLOR_TEXT_FAINT = "#5a4e50"   # minor ticks, disabled text
 
-# Semantic / zone colours (neon-leaning, glow-friendly, still sunlight legible).
-COLOR_ACCENT = "#34c8ff"       # electric cyan - neutral highlight / speed
-COLOR_COLD = "#2f9bff"         # blue    - coolant below optimal
-COLOR_OPTIMAL = "#20e07b"      # green   - healthy operating band
-COLOR_AMBER = "#ffb020"        # amber   - caution / upper rev band
-COLOR_CRITICAL = "#ff3838"     # red     - overheating / redline
-COLOR_SHIFT = "#ff2bd6"        # magenta - final shift-light flash
+# Semantic / zone colours (racing red dominant, functional differentiation).
+COLOR_ACCENT = "#e81820"       # racing red - primary accent / highlight
+COLOR_COLD = "#6690b0"         # steel blue - coolant below optimal
+COLOR_OPTIMAL = "#ffffff"      # white      - healthy operating band
+COLOR_AMBER = "#ff8c00"        # dark orange - caution / upper rev band
+COLOR_CRITICAL = "#ff2020"     # bright red  - overheating / redline
+COLOR_SHIFT = "#ff0040"        # hot crimson - final shift-light flash
 
-COLOR_OK = "#20e07b"           # connection status: live data
-COLOR_WARN = "#ffb020"         # connection status: reconnecting
-COLOR_MOCK = "#34c8ff"         # connection status: simulated data
+COLOR_OK = "#ffffff"           # connection status: live data (white)
+COLOR_WARN = "#ff8c00"         # connection status: reconnecting
+COLOR_MOCK = "#e81820"         # connection status: simulated data (red)
 
 # ---------------------------------------------------------------------------
 # Glow / depth tuning (soft "bloom" simulated with layered translucent passes)
@@ -132,6 +132,23 @@ BATTERY_LOW_V: float = 12.5              # < 12.5V => red (concerning)
 BATTERY_OPTIMAL_MIN_V: float = 13.5      # 13.5..14.5 => green (charging)
 BATTERY_OPTIMAL_MAX_V: float = 14.5
 BATTERY_HIGH_V: float = 15.5             # > 15.5V => red (overcharging)
+
+# ---------------------------------------------------------------------------
+# Intake air temperature thresholds (°C)
+# ---------------------------------------------------------------------------
+# High intake temperatures reduce air density and cause ignition timing pull /
+# loss of power on the 2ZZ.
+INTAKE_MIN_C: float = -10.0
+INTAKE_MAX_C: float = 90.0
+INTAKE_OPTIMAL_MAX_C: float = 45.0       # < 45C => green (good density)
+INTAKE_CRITICAL_C: float = 60.0          # 45-60C => amber, >=60C => red (heat soak)
+
+# ---------------------------------------------------------------------------
+# Fuel level thresholds (%)
+# ---------------------------------------------------------------------------
+FUEL_LEVEL_LOW_PCT: float = 15.0         # < 15% => red flashing (low fuel)
+FUEL_LEVEL_CAUTION_PCT: float = 30.0     # 15-30% => amber
+
 
 # ---------------------------------------------------------------------------
 # Throttle position (track layout)

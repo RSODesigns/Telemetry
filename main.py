@@ -121,14 +121,16 @@ def main(argv: list[str] | None = None) -> int:
     controller.message.connect(log.info)  # mirror diagnostics to the console
 
     if args.layout == "track":
-        # Track: coolant, battery, speed go into compact readouts; throttle
-        # drives the horizontal bar. The window handles its own overheat
-        # detection against the Track threshold via ``on_coolant_changed``,
-        # so ``overheat_changed`` is intentionally NOT connected here.
+        # Track: readouts are fed through the unified SidePanel slot setters.
+        # The window handles its own overheat detection against the Track
+        # threshold via ``on_coolant_changed``, so ``overheat_changed`` is
+        # intentionally NOT connected here.
         controller.coolant_changed.connect(window.on_coolant_changed)
-        controller.speed_changed.connect(window.speed_readout.set_value)
-        controller.throttle_changed.connect(window.throttle_bar.set_value)
-        controller.battery_changed.connect(window.battery_readout.set_value)
+        controller.speed_changed.connect(window._set_speed)
+        controller.relative_throttle_changed.connect(window._set_throttle)
+        controller.battery_changed.connect(window._set_battery)
+        controller.intake_temp_changed.connect(window._set_intake)
+        controller.fuel_level_changed.connect(window._set_fuel)
     else:
         # General: coolant bar / big tacho / MPH speedometer plus the classic
         # controller-driven overheat overlay (threshold: COOLANT_CRITICAL_C).

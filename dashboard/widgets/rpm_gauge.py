@@ -17,11 +17,11 @@ central number and the whole shift-light strip blink between the primary
 
 Two callers currently instantiate this widget with different tunings:
 
-* **General layout (default)** - the classic road-friendly scheme::
+* **General layout (default)** - the road-friendly scheme::
 
-      0    .. 6000  -> solid green
-      6000 .. 7800  -> amber
-      7800 .. 8500  -> flashing red / magenta
+      0    .. 6200  -> blue   (below cam switch / normal cruising)
+      6200 .. 8000  -> green  (on-cam power band)
+      8000 .. 8500  -> flashing red / magenta (shift NOW!)
 
 * **Track layout** - blue below the 2ZZ VVTL-i cam switchover (6200 rpm),
   green above it (the on-cam power band), and flashing red only right at the
@@ -58,14 +58,20 @@ SWEEP_DEG = 270.0
 # dark); LEDs then fill progressively up to the redline.
 SHIFT_START_RPM = 3500.0
 
-# Default zones = the original general-layout scheme. Given as a list of
+# General-dashboard RPM zone colours (distinct from the track theme).
+_RPM_BLUE = "#4488cc"             # cruising / below cam-switch
+_RPM_GREEN = "#30b860"            # on-cam power band
+_RPM_ZONE_CAM = 6200.0            # blue -> green transition
+_RPM_ZONE_HOT = 8000.0            # green -> red transition
+
+# Default zones = the general-layout scheme. Given as a list of
 # ``(max_rpm, colour)`` pairs, sorted ascending. An RPM value falls into the
 # first zone whose ``max_rpm`` it is at or below. The last zone's max should
 # be at least ``config.RPM_MAX``.
 _DEFAULT_ZONES: "list[tuple[float, str]]" = [
-    (config.RPM_GREEN_MAX, config.COLOR_OPTIMAL),
-    (config.RPM_AMBER_MAX, config.COLOR_AMBER),
-    (config.RPM_MAX,       config.COLOR_CRITICAL),
+    (_RPM_ZONE_CAM,  _RPM_BLUE),
+    (_RPM_ZONE_HOT,  _RPM_GREEN),
+    (config.RPM_MAX, config.COLOR_CRITICAL),
 ]
 
 
@@ -76,6 +82,7 @@ class RPMGauge(BaseGauge):
         self,
         zones: "list[tuple[float, str]] | None" = None,
         redline_rpm: float | None = None,
+        show_shift_lights: bool = True,
         parent=None,
     ) -> None:
         """Build a tacho with optional per-layout zone tuning.
@@ -91,6 +98,9 @@ class RPMGauge(BaseGauge):
             lights all blink between the primary ``COLOR_CRITICAL`` red and
             the secondary ``COLOR_SHIFT`` magenta. If ``None`` the general-
             layout redline (``config.RPM_AMBER_MAX``) is used.
+        show_shift_lights:
+            Whether to draw the top LED shift light strip. Set to False
+            when placing a LapTimer widget above the dial.
         """
         super().__init__(config.RPM_MIN, config.RPM_MAX, parent)
         self._zones: list[tuple[float, str]] = (
@@ -98,9 +108,10 @@ class RPMGauge(BaseGauge):
         )
         self._redline_rpm: float = (
             float(redline_rpm) if redline_rpm is not None
-            else config.RPM_AMBER_MAX
+            else _RPM_ZONE_HOT
         )
-        self.setMinimumSize(300, 320)
+        self._show_shift_lights: bool = show_shift_lights
+        self.setMinimumSize(240, 240 if not show_shift_lights else 320)
 
     # ------------------------------------------------------------------ #
     # Critical-state hook: the redline band blinks
@@ -153,11 +164,12 @@ class RPMGauge(BaseGauge):
         self.draw_card(painter)
 
         # --- Top strip: progressive shift lights -------------------------
-        strip_h = h * 0.14
-        self._draw_shift_lights(painter, w, strip_h)
-
-        # --- Dial geometry ----------------------------------------------
-        dial_top = strip_h
+        if self._show_shift_lights:
+            strip_h = h * 0.14
+            self._draw_shift_lights(painter, w, strip_h)
+            dial_top = strip_h
+        else:
+            dial_top = h * 0.02
         dial_h = h - dial_top
         R = min(w, dial_h) * 0.5 * 0.92
         cx = w * 0.5

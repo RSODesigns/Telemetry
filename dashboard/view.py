@@ -72,10 +72,15 @@ from . import config
 from .telemetry import ConnectionState
 from .widgets import (
     CoolantGauge,
+    FuelStatusWidget,
+    LapTimerWidget,
     MiniReadout,
+    MotecTachometer,
     RPMGauge,
+    SidePanel,
     Speedometer,
     ThrottleBar,
+    ThrottleCard,
 )
 
 
@@ -337,8 +342,8 @@ class DashboardWindow(_BaseDashboardWindow):
 #  Track layout - dominant tacho, peripheral compact readouts, throttle bar
 # ===========================================================================
 class TrackDashboardWindow(_BaseDashboardWindow):
-    """Motorsport-oriented layout: tacho + shift-lights dominate; the
-    peripherals shrink to compact numeric readouts.
+    """Motorsport-oriented layout: dominant central tacho flanked by symmetric
+    left (Engine/Fuel) and right (Drivetrain/Dynamics) peripheral cards.
 
     Notes on the overheat overlay
     -----------------------------
@@ -356,58 +361,88 @@ class TrackDashboardWindow(_BaseDashboardWindow):
         super().__init__(windowed=windowed, parent=parent)
 
         # --- Widgets ----------------------------------------------------
-        # 2ZZ VVTL-i zones: blue below the cam switch (mild lobe, out of the
-        # power band), green above it (on-cam, where the engine sings),
-        # flashing red only right at the 8500 redline.
-        self.rpm_gauge = RPMGauge(
-            zones=[
-                (config.TRACK_RPM_CAM_SWITCH, config.COLOR_COLD),
-                (config.RPM_MAX,              config.COLOR_OPTIMAL),
-            ],
-            redline_rpm=config.RPM_MAX,
-        )
+        self.motec_gauge = MotecTachometer()
+        self.rpm_gauge = self.motec_gauge  # backwards compatible slot handle
+        self.lap_timer_widget = self.motec_gauge  # integrated lap timer
 
-        self.coolant_readout = MiniReadout(
-            label="COOLANT",
-            unit="\u00b0C",
-            value_fmt="{:.0f}",
-            zone_fn=self._coolant_zone,
-            minimum=config.COOLANT_MIN_C,
-            maximum=config.COOLANT_MAX_C,
-        )
-        self.battery_readout = MiniReadout(
-            label="BATTERY",
-            unit=" V",
-            value_fmt="{:.1f}",
-            zone_fn=self._battery_zone,
-            minimum=9.0,
-            maximum=16.0,
-        )
-        self.speed_readout = MiniReadout(
-            label="SPEED",
-            unit=" MPH",
-            value_fmt="{:.0f}",
-            zone_fn=None,               # neutral colour; no zones for speed
-            minimum=0.0,
-            maximum=config.SPEED_MAX_MPH,
-        )
-        self.throttle_bar = ThrottleBar()
+        # --- Left Panel: Coolant | Intake | Fuel Level -------------------
+        self.left_panel = SidePanel(slots=[
+            {
+                "label": "COOLANT",
+                "unit": "\u00b0C",
+                "value_fmt": "{:.0f}",
+                "zone_fn": self._coolant_zone,
+                "minimum": config.COOLANT_MIN_C,
+                "maximum": config.COOLANT_MAX_C,
+            },
+            {
+                "label": "INTAKE",
+                "unit": "\u00b0C",
+                "value_fmt": "{:.0f}",
+                "zone_fn": self._intake_zone,
+                "minimum": config.INTAKE_MIN_C,
+                "maximum": config.INTAKE_MAX_C,
+            },
+            {
+                "label": "FUEL LEVEL",
+                "unit": "%",
+                "value_fmt": "{:.0f}",
+                "zone_fn": self._fuel_zone,
+                "minimum": 0.0,
+                "maximum": 100.0,
+            },
+        ])
 
-        # --- Top strip: coolant | battery | speed -----------------------
-        top = QHBoxLayout()
-        top.setSpacing(8)
-        top.setContentsMargins(0, 0, 0, 0)
-        top.addWidget(self.coolant_readout, 1)
-        top.addWidget(self.battery_readout, 1)
-        top.addWidget(self.speed_readout, 1)
+        # --- Right Panel: Battery | Speed | Throttle ---------------------
+        self.right_panel = SidePanel(slots=[
+            {
+                "label": "BATTERY",
+                "unit": " V",
+                "value_fmt": "{:.1f}",
+                "zone_fn": self._battery_zone,
+                "minimum": 9.0,
+                "maximum": 16.0,
+            },
+            {
+                "label": "SPEED (MPH)",
+                "unit": "",
+                "value_fmt": "{:.0f}",
+                "zone_fn": None,
+                "minimum": 0.0,
+                "maximum": config.SPEED_MAX_MPH,
+            },
+            {
+                "label": "THROTTLE",
+                "unit": "%",
+                "value_fmt": "{:.0f}",
+                "zone_fn": None,
+                "minimum": 0.0,
+                "maximum": 100.0,
+                "show_bar": True,
+            },
+        ])
 
-        # --- Outer VBox: top strip / tacho / throttle bar / status ------
+        # Expose slot setters for signal wiring from main.py
+        self._set_coolant = self.left_panel.slot_setter(0)
+        self._set_intake = self.left_panel.slot_setter(1)
+        self._set_fuel = self.left_panel.slot_setter(2)
+        self._set_battery = self.right_panel.slot_setter(0)
+        self._set_speed = self.right_panel.slot_setter(1)
+        self._set_throttle = self.right_panel.slot_setter(2)
+
+        # --- Main Grid: Left | Center | Right ---------------------------
+        main_grid = QHBoxLayout()
+        main_grid.setSpacing(0)
+        main_grid.setContentsMargins(0, 0, 0, 0)
+        main_grid.addWidget(self.left_panel, 1)
+        main_grid.addWidget(self.motec_gauge, 2)
+        main_grid.addWidget(self.right_panel, 1)
+
+        # --- Outer VBox: main grid / status -----------------------------
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 4)
-        outer.setSpacing(6)
-        outer.addLayout(top, 0)                       # natural height (~72 px)
-        outer.addWidget(self.rpm_gauge, 1)            # dominant, stretches
-        outer.addWidget(self.throttle_bar, 0)         # natural height (~48 px)
+        outer.setSpacing(4)
+        outer.addLayout(main_grid, 1)
         outer.addLayout(self._build_status_row(), 0)
 
         # Track its own overheat state so we only toggle the overlay on flips.
@@ -424,11 +459,11 @@ class TrackDashboardWindow(_BaseDashboardWindow):
         Controller signal payload: ``None`` means "no data" and shouldn't
         trigger the warning.
         """
-        # 1. Feed the mini readout so the number/colour updates.
-        self.coolant_readout.set_value(temp)
+        # 1. Feed the SidePanel's coolant slot so the number/colour updates.
+        self._set_coolant(temp)
 
-        # 2. Drive the overheat overlay against the Track threshold.
-        is_over = temp is not None and temp >= config.TRACK_COOLANT_CRITICAL_C
+        # 2. Drive the overheat overlay against the Track threshold (95.0C).
+        is_over = temp is not None and temp >= 95.0
         if is_over != self._overheating:
             self._overheating = is_over
             self.set_overheating(is_over)
@@ -438,14 +473,30 @@ class TrackDashboardWindow(_BaseDashboardWindow):
     # ------------------------------------------------------------------ #
     @staticmethod
     def _coolant_zone(temp: float) -> tuple[str, bool]:
-        """Track thresholds: <84 blue, 84-99 green, 100-104 amber, 105+ red."""
-        if temp < config.TRACK_COOLANT_COLD_MAX_C:
+        """Track thresholds: <70 blue, 70-94 white, 95+ red."""
+        if temp < 70.0:
             return config.COLOR_COLD, False
-        if temp <= config.TRACK_COOLANT_OPTIMAL_MAX_C:
+        if temp < 95.0:
             return config.COLOR_OPTIMAL, False
-        if temp < config.TRACK_COOLANT_CRITICAL_C:
+        return config.COLOR_CRITICAL, True
+
+    @staticmethod
+    def _intake_zone(temp: float) -> tuple[str, bool]:
+        """Intake thresholds: <45 green, 45-60 amber, >=60 red."""
+        if temp < config.INTAKE_OPTIMAL_MAX_C:
+            return config.COLOR_OPTIMAL, False
+        if temp < config.INTAKE_CRITICAL_C:
             return config.COLOR_AMBER, False
         return config.COLOR_CRITICAL, True
+
+    @staticmethod
+    def _fuel_zone(pct: float) -> tuple[str, bool]:
+        """Fuel level: <15% flashing red, 15-30% amber, >=30% green."""
+        if pct < config.FUEL_LEVEL_LOW_PCT:
+            return config.COLOR_CRITICAL, True
+        if pct < config.FUEL_LEVEL_CAUTION_PCT:
+            return config.COLOR_AMBER, False
+        return config.COLOR_OPTIMAL, False
 
     @staticmethod
     def _battery_zone(volts: float) -> tuple[str, bool]:

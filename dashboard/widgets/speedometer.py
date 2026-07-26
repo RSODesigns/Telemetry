@@ -76,7 +76,7 @@ class Speedometer(BaseGauge):
 
         if self._has_data:
             self.glow_arc(painter, arc_rect, START_ANGLE_DEG,
-                          -self.fraction * SWEEP_DEG, self.color(config.COLOR_ACCENT), arc_w)
+                          -self.fraction * SWEEP_DEG, self.color(config.COLOR_TEXT), arc_w)
 
         # --- Big digital number -----------------------------------------
         num_rect = QRectF(cx - R, cy - R * 0.56, 2 * R, R * 0.86)
@@ -91,7 +91,7 @@ class Speedometer(BaseGauge):
             painter.drawText(num_rect, Qt.AlignCenter, "--")
 
         # --- "MPH" unit caption -----------------------------------------
-        painter.setPen(self.color(config.COLOR_ACCENT))
+        painter.setPen(self.color(config.COLOR_TEXT))
         painter.setFont(self.scaled_font(R * 0.19, bold=True, spacing=30))
         painter.drawText(QRectF(cx - R, cy + R * 0.34, 2 * R, R * 0.3),
                          Qt.AlignCenter, "MPH")
