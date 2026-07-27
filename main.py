@@ -21,7 +21,9 @@ Running it
 ----------
 On the Raspberry Pi (fullscreen kiosk, cursor hidden)::
 
-    python3 main.py
+    python3 main.py                        # shows welcome screen
+    python3 main.py --layout general       # skip welcome, go straight to Road
+    python3 main.py --layout track         # skip welcome, go straight to Track
 
 For development on a laptop with no adapter, force the simulator and run in a
 normal window::
@@ -31,11 +33,12 @@ normal window::
 Command-line options
 --------------------
     --mock              Skip real hardware and always use the mock engine.
-    --windowed          Run in a normal 800x480 window instead of fullscreen.
+    --windowed          Run in a normal window instead of fullscreen.
     --layout {general,track}
-                        Which dashboard layout to show.
-                        ``general`` (default) - vertical coolant bar, big
-                        tacho, digital MPH: the original road-friendly view.
+                        Which dashboard layout to show.  When omitted a
+                        welcome screen with Road / Track buttons is shown.
+                        ``general`` - vertical coolant bar, big tacho, digital
+                        MPH: the original road-friendly view.
                         ``track`` - dominant tacho with a compact top strip of
                         coolant / battery / speed readouts and a horizontal
                         throttle bar underneath; uses stricter coolant zones
@@ -59,6 +62,7 @@ from PyQt5.QtWidgets import QApplication
 from dashboard import config
 from dashboard.controller import DashboardController
 from dashboard.view import DashboardWindow, TrackDashboardWindow
+from dashboard.welcome import WelcomeScreen
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,9 +84,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="run in a normal window instead of fullscreen (for development)",
     )
     parser.add_argument(
-        "--layout", choices=("general", "track"), default="general",
+        "--layout", choices=("general", "track"), default=None,
         help=(
-            "which dashboard layout to show. 'general' (default) is the "
+            "which dashboard layout to show.  When omitted a welcome screen "
+            "with Road / Track buttons is displayed.  'general' is the "
             "original road-friendly three-gauge view; 'track' emphasises the "
             "tacho and shift-lights with compact readouts and a throttle bar."
         ),
@@ -90,19 +95,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
-
-    app = QApplication(sys.argv)
-    app.setApplicationName("Lotus Elise Dashboard")
-    # Hide the mouse pointer everywhere for the embedded touchscreen build.
-    if not args.windowed:
-        app.setOverrideCursor(Qt.BlankCursor)
-
+# ---------------------------------------------------------------------------
+#  Dashboard builder: creates the window + controller, wires them, starts data
+# ---------------------------------------------------------------------------
+def _launch_dashboard(layout: str, args: argparse.Namespace,
+                      app: QApplication) -> None:
+    """Build the chosen dashboard window, wire it to a fresh controller, and
+    show it.  This is called either immediately (when ``--layout`` is given) or
+    after the user picks Road / Track on the welcome screen.
+    """
     # --- View --------------------------------------------------------------
-    # Two layouts share the same signal surface; the wiring below dispatches
-    # per-layout because the target widget names and slot semantics differ.
-    if args.layout == "track":
+    if layout == "track":
         window = TrackDashboardWindow(windowed=args.windowed)
     else:
         window = DashboardWindow(windowed=args.windowed)
@@ -112,19 +115,12 @@ def main(argv: list[str] | None = None) -> int:
     controller = DashboardController(force_mock=force_mock)
 
     # --- Wire Controller signals -> View -----------------------------------
-    # These are all direct (same-thread) connections: the Controller already
-    # marshalled the worker-thread data onto the GUI thread for us.
-    # Signals common to both layouts.
     controller.rpm_changed.connect(window.rpm_gauge.set_value)
     controller.connection_changed.connect(window.set_connection_state)
     controller.message.connect(window.set_message)
-    controller.message.connect(log.info)  # mirror diagnostics to the console
+    controller.message.connect(log.info)
 
-    if args.layout == "track":
-        # Track: readouts are fed through the unified SidePanel slot setters.
-        # The window handles its own overheat detection against the Track
-        # threshold via ``on_coolant_changed``, so ``overheat_changed`` is
-        # intentionally NOT connected here.
+    if layout == "track":
         controller.coolant_changed.connect(window.on_coolant_changed)
         controller.speed_changed.connect(window._set_speed)
         controller.relative_throttle_changed.connect(window._set_throttle)
@@ -132,13 +128,11 @@ def main(argv: list[str] | None = None) -> int:
         controller.intake_temp_changed.connect(window._set_intake)
         controller.fuel_level_changed.connect(window._set_fuel)
     else:
-        # General: coolant bar / big tacho / MPH speedometer plus the classic
-        # controller-driven overheat overlay (threshold: COOLANT_CRITICAL_C).
         controller.coolant_changed.connect(window.coolant_gauge.set_value)
         controller.speed_changed.connect(window.speedometer.set_value)
         controller.overheat_changed.connect(window.set_overheating)
 
-    # --- Clean shutdown: stop the data thread before the app exits ---------
+    # --- Clean shutdown ----------------------------------------------------
     app.aboutToQuit.connect(controller.stop)
 
     # --- Show ---------------------------------------------------------------
@@ -147,13 +141,47 @@ def main(argv: list[str] | None = None) -> int:
     else:
         window.showFullScreen()
 
-    # --- Start polling and enter the event loop ----------------------------
     controller.start()
     log.info(
         "Dashboard started (%s mode, %s layout). Press Esc or Q to quit.",
         "mock" if args.mock else "auto",
-        args.layout,
+        layout,
     )
+
+    # Keep references alive for the lifetime of the app so they aren't GC'd.
+    app._dashboard_window = window
+    app._dashboard_controller = controller
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("Lotus Elise Dashboard")
+    if not args.windowed:
+        app.setOverrideCursor(Qt.BlankCursor)
+
+    if args.layout is not None:
+        # Direct launch: skip the welcome screen (backwards compatible).
+        _launch_dashboard(args.layout, args, app)
+    else:
+        # Show the welcome / mode-selection screen.
+        welcome = WelcomeScreen(windowed=args.windowed)
+
+        def _on_layout_chosen(layout: str) -> None:
+            welcome.close()
+            _launch_dashboard(layout, args, app)
+
+        welcome.layout_chosen.connect(_on_layout_chosen)
+
+        if args.windowed:
+            welcome.show()
+        else:
+            welcome.showFullScreen()
+
+        # Keep a reference so the welcome screen isn't garbage-collected.
+        app._welcome_screen = welcome
+
     return app.exec_()
 
 

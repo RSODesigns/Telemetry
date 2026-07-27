@@ -162,11 +162,7 @@ class CoolantGauge(BaseGauge):
                 text_color = self.color(config.COLOR_CRITICAL, alpha=70)
             painter.setFont(self.scaled_font(h * 0.15))
             self.draw_glow_text(painter, readout_rect, Qt.AlignCenter,
-                                f"{temp:.0f}\u00b0", text_color, glow=hot and self._flash_on)
-            # small "C" unit
-            painter.setPen(self.color(config.COLOR_TEXT_DIM))
-            painter.setFont(self.scaled_font(h * 0.06, spacing=10))
-            painter.drawText(readout_rect, Qt.AlignHCenter | Qt.AlignBottom, "\u00b0CELSIUS")
+                                f"{temp:.0f}\u00b0c", text_color, glow=hot and self._flash_on)
         else:
             painter.setPen(self.color(config.COLOR_TEXT_DIM))
             painter.setFont(self.scaled_font(h * 0.15))
