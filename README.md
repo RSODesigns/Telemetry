@@ -21,8 +21,19 @@ python3 -m pip install obd pyserial
 
 ### Running the Dashboard
 
+#### 🏠 Welcome Screen (default)
+*Displays the RSO Designs logo with Road and Track pill buttons to choose your layout.*
+
+```bash
+# Laptop / Simulated mode (no car needed)
+python main.py --mock --windowed
+
+# Raspberry Pi (Fullscreen kiosk mode)
+python main.py
+```
+
 #### 🏎️ Race-Inspired Track Layout (`--layout track`)
-*Dominant central 270° tachometer + progressive shift lights flanked by symmetric engine/drivetrain peripheral cards.*
+*Skips the welcome screen. Dominant central 270° tachometer + progressive shift lights flanked by symmetric engine/drivetrain peripheral cards.*
 
 ```bash
 # Laptop / Simulated mode (no car needed)
@@ -36,7 +47,7 @@ python main.py --layout track
 ```
 
 #### 🚗 General Road Layout (`--layout general`)
-*Classic three-gauge view: vertical coolant bar, dominant central tachometer, and digital speedometer.*
+*Skips the welcome screen. Classic three-gauge view: vertical coolant bar, dominant central tachometer, and digital speedometer.*
 
 ```bash
 # Laptop / Simulated mode
