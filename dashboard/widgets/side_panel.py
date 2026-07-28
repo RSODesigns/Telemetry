@@ -209,13 +209,13 @@ class SidePanel(QWidget):
             if i < n - 1:
                 div_y = y_top + slot_h
                 # Dark groove line (shadow)
-                painter.setPen(QPen(QColor("#080606"), 1.5))
+                painter.setPen(QPen(QColor("#060606"), 1.5))
                 painter.drawLine(
                     int(margin_x + 6), int(div_y),
                     int(w - margin_x - 6), int(div_y),
                 )
                 # Light highlight line (bevel)
-                painter.setPen(QPen(QColor("#2a1a1e"), 1.0))
+                painter.setPen(QPen(QColor("#252525"), 1.0))
                 painter.drawLine(
                     int(margin_x + 6), int(div_y + 1),
                     int(w - margin_x - 6), int(div_y + 1),
@@ -309,7 +309,7 @@ class SidePanel(QWidget):
         track_path.addRoundedRect(bar_rect, radius, radius)
         painter.fillPath(track_path, QColor(config.COLOR_TRACK))
         painter.setBrush(Qt.NoBrush)
-        painter.setPen(QPen(QColor("#1a1214"), 1.0))
+        painter.setPen(QPen(QColor("#151515"), 1.0))
         painter.drawRoundedRect(bar_rect, radius, radius)
 
         # Fill

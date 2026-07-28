@@ -112,7 +112,20 @@ def _launch_dashboard(layout: str, args: argparse.Namespace,
 
     # --- Controller (owns the Model thread) --------------------------------
     force_mock = True if args.mock else None  # None => auto-detect, fall back
-    controller = DashboardController(force_mock=force_mock)
+
+    # Only query the OBD PIDs this layout actually displays. On a slow K-line
+    # (ISO 9141-2) link every PID is a blocking round-trip - the ELM327 can't
+    # pipeline requests - so skipping unused ones directly cuts per-frame
+    # latency. See OBDModel's ``_needed_fields`` docstring for details.
+    if layout == "track":
+        needed_fields = frozenset({
+            "rpm", "coolant_c", "speed_kmh", "battery_v",
+            "intake_temp_c", "relative_throttle_pct", "fuel_level_pct",
+        })
+    else:
+        needed_fields = frozenset({"rpm", "coolant_c", "speed_kmh"})
+
+    controller = DashboardController(force_mock=force_mock, needed_fields=needed_fields)
 
     # --- Wire Controller signals -> View -----------------------------------
     controller.rpm_changed.connect(window.rpm_gauge.set_value)

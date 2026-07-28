@@ -46,21 +46,21 @@ UI_POLL_INTERVAL_MS: int = max(1, round(1000 / UI_POLL_HZ))  # ~33 ms
 # ---------------------------------------------------------------------------
 # Colour palette - "Racing Red / Black / White" instrument theme
 # ---------------------------------------------------------------------------
-# Deep warm-black canvas with a subtle dark-crimson vignette centre so the
-# whole panel reads as a cockpit instrument, not a consumer infotainment screen.
-COLOR_BG_TOP = "#1a1012"       # vignette centre (warm black, hint of crimson)
-COLOR_BG_EDGE = "#0a0607"      # vignette edges (near pure black)
-COLOR_BACKGROUND = "#0e0a0a"   # base flat fill / fallback
+# Deep neutral-black canvas (no colour cast) so the whole panel reads as a
+# cockpit instrument, not a consumer infotainment screen.
+COLOR_BG_TOP = "#141414"       # vignette centre (neutral black)
+COLOR_BG_EDGE = "#080808"      # vignette edges (near pure black)
+COLOR_BACKGROUND = "#0b0b0b"   # base flat fill / fallback
 
 # Each gauge sits on an elevated rounded "card" with a hairline border.
 # (Used by the General layout; Track layout uses card-free SidePanels.)
-COLOR_CARD_TOP = "#1d1518"     # card fill, top of its gradient
-COLOR_CARD_BOTTOM = "#141012"  # card fill, bottom of its gradient
-COLOR_CARD_BORDER = "#3a2228"  # hairline border around the card
-COLOR_CARD_HILITE = "#4a2a32"  # faint top inner highlight line
+COLOR_CARD_TOP = "#191919"     # card fill, top of its gradient
+COLOR_CARD_BOTTOM = "#121212"  # card fill, bottom of its gradient
+COLOR_CARD_BORDER = "#2c2c2c"  # hairline border around the card
+COLOR_CARD_HILITE = "#373737"  # faint top inner highlight line
 
-COLOR_PANEL = "#1a1214"        # neutral fill (e.g. an unlit shift LED)
-COLOR_TRACK = "#2a1c20"        # unfilled portion of an arc/bar
+COLOR_PANEL = "#151515"        # neutral fill (e.g. an unlit shift LED)
+COLOR_TRACK = "#222222"        # unfilled portion of an arc/bar
 
 COLOR_TEXT = "#f5f0f0"         # primary readouts (warm white)
 COLOR_TEXT_DIM = "#8a7e80"     # labels, units, secondary info

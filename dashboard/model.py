@@ -79,6 +79,26 @@ except Exception:  # pragma: no cover - depends on host environment
     OBD_AVAILABLE = False
 
 
+# ---------------------------------------------------------------------------
+# Field classification for the per-frame query budget (see OBDModel's
+# ``_needed_fields`` / slow-field decimation notes below).
+#
+# "Fast" fields reflect driver input / motion in real time (RPM, speed,
+# throttle) and are re-queried every loop iteration. Every other field
+# changes only over seconds-to-minutes (temperatures, battery, fuel) - on a
+# K-line (ISO 9141-2) link, where the ELM327 can't pipeline requests and
+# every PID is a blocking round-trip, re-fetching those just as often steals
+# round-trip budget from the fields that actually need to be fresh.
+# ---------------------------------------------------------------------------
+FAST_TELEMETRY_FIELDS = frozenset({
+    "rpm", "speed_kmh", "throttle_pct", "relative_throttle_pct",
+})
+ALL_QUERY_FIELDS = (
+    "rpm", "coolant_c", "speed_kmh", "throttle_pct", "battery_v",
+    "intake_temp_c", "relative_throttle_pct", "fuel_status", "fuel_level_pct",
+)
+
+
 class OBDModel(QThread):
     """Background worker that continuously produces telemetry.
 
@@ -90,12 +110,26 @@ class OBDModel(QThread):
     * :meth:`drain_messages` - and clears any queued diagnostic strings.
     """
 
-    def __init__(self, force_mock: bool | None = None, parent=None) -> None:
+    def __init__(self, force_mock: bool | None = None,
+                needed_fields: frozenset[str] | None = None, parent=None) -> None:
         super().__init__(parent)
         # Whether to skip real hardware entirely. Defaults to the config flag.
         self._force_mock = config.FORCE_MOCK_MODE if force_mock is None else force_mock
         self._running = True                 # cleared by stop() to end the loop
         self._connection = None              # the live obd.OBD instance, if any
+
+        # Which Telemetry fields the active layout actually renders (by
+        # dataclass attribute name, e.g. "rpm", "coolant_c"). ``None`` means
+        # "no restriction, query everything" (the historic default, used by
+        # anything that constructs OBDModel directly, e.g. scratch scripts).
+        #
+        # Why this matters: on a K-line (ISO 9141-2) link every PID is a
+        # blocking round-trip over a slow, single-wire, half-duplex bus - the
+        # ELM327 cannot pipeline requests, so each extra query in the loop is
+        # pure added latency. Restricting the query set to only what's on
+        # screen is the only lever available to cut per-frame lag; it can't
+        # be parallelised away.
+        self._needed_fields = needed_fields
 
         # ---- Thread-safe published state (read by the GUI thread) --------
         self._lock = threading.Lock()
@@ -165,8 +199,57 @@ class OBDModel(QThread):
     # Real-hardware polling loop
     # ------------------------------------------------------------------ #
     def _run_obd_loop(self) -> None:
-        """Continuously query the ECU, with dropout detection + reconnect."""
+        """Continuously query the ECU, with dropout detection + reconnect.
+
+        Query budget per iteration
+        ---------------------------
+        Restrict the query set to what the active layout actually renders
+        (see the ``_needed_fields`` docstring in __init__), then split that
+        set into "fast" fields (RPM, speed, throttle - re-queried every
+        iteration, since they can change from one frame to the next) and
+        "slow" fields (temperatures, battery, fuel - re-queried in rotation,
+        one per iteration, since they physically cannot change meaningfully
+        within a single ~50ms poll period). This keeps the *fast* fields'
+        round-trip latency low and constant regardless of how many slow
+        gauges a layout has, which is the only lever available on a K-line
+        (ISO 9141-2) link where the ELM327 can't pipeline requests.
+        """
         consecutive_errors = 0
+
+        # Restrict the per-frame query set to what the active layout actually
+        # renders. ``None`` (no restriction passed in) queries every PID, in
+        # rotation for the slow ones, matching pre-existing behaviour's data
+        # (just not necessarily every single field on every single frame).
+        want = self._needed_fields
+        def needed(field: str) -> bool:
+            return want is None or field in want
+
+        # PID/query dispatch for every field, used for both fast (every
+        # iteration) and slow (one per iteration, round-robin) fields.
+        query_fn = {
+            "rpm": lambda: self._query_value(obd.commands.RPM),
+            "speed_kmh": lambda: self._query_value(obd.commands.SPEED),
+            "throttle_pct": lambda: self._query_value(obd.commands.THROTTLE_POS),
+            "relative_throttle_pct": lambda: self._query_value(obd.commands.RELATIVE_THROTTLE_POS),
+            "coolant_c": lambda: self._query_value(obd.commands.COOLANT_TEMP),
+            # ELM_VOLTAGE is an AT command answered by the adapter itself,
+            # not the ECU, so it stays live even during ignition-off / ECU
+            # -sleep windows and doubles as a link health signal.
+            "battery_v": lambda: self._query_value(obd.commands.ELM_VOLTAGE),
+            "intake_temp_c": lambda: self._query_value(obd.commands.INTAKE_TEMP),
+            "fuel_status": self._query_fuel_status,
+            "fuel_level_pct": lambda: self._query_value(obd.commands.FUEL_LEVEL),
+        }
+
+        slow_fields = [f for f in ALL_QUERY_FIELDS
+                       if f not in FAST_TELEMETRY_FIELDS and needed(f)]
+        slow_cursor = 0
+        # Last known-good value for each slow field, carried forward between
+        # the iterations where it isn't that field's turn to be queried.
+        # Only overwritten on a *successful* (non-None) query, so a single
+        # flaky round-trip doesn't blank an otherwise healthy gauge. Starts
+        # as None ("no data yet"), same as every other field.
+        slow_cache: dict[str, object] = {f: None for f in slow_fields}
 
         while self._running:
             loop_start = time.monotonic()
@@ -175,35 +258,54 @@ class OBDModel(QThread):
                 if self._connection is None or not self._connection.is_connected():
                     raise ConnectionError("OBD link reported not connected")
 
+                # Fields attempted with a real round-trip *this iteration*,
+                # mapped to what came back. Used only for dropout detection
+                # below - a field absent from this dict was never attempted
+                # (excluded by ``_needed_fields``) and must not be treated
+                # as a failure. Slow fields not up in this iteration's
+                # rotation are likewise absent here, even though the
+                # snapshot below still reports their cached value.
+                fresh: dict[str, object] = {}
+                for fld in FAST_TELEMETRY_FIELDS:
+                    if needed(fld):
+                        fresh[fld] = query_fn[fld]()
+
+                # --- Slow fields: query exactly one per iteration, in
+                # round-robin, and reuse the cached value for the rest. ---
+                if slow_fields:
+                    slow_field = slow_fields[slow_cursor]
+                    slow_cursor = (slow_cursor + 1) % len(slow_fields)
+                    result = query_fn[slow_field]()
+                    fresh[slow_field] = result
+                    if result is not None:
+                        slow_cache[slow_field] = result
+
                 snapshot = Telemetry(
-                    rpm=self._query_value(obd.commands.RPM),
-                    coolant_c=self._query_value(obd.commands.COOLANT_TEMP),
-                    speed_kmh=self._query_value(obd.commands.SPEED),
-                    throttle_pct=self._query_value(obd.commands.THROTTLE_POS),
-                    # ELM_VOLTAGE is an AT command answered by the adapter
-                    # itself, not the ECU, so it stays live even during
-                    # ignition-off / ECU-sleep windows and doubles as a link
-                    # health signal.
-                    battery_v=self._query_value(obd.commands.ELM_VOLTAGE),
-                    intake_temp_c=self._query_value(obd.commands.INTAKE_TEMP),
-                    relative_throttle_pct=self._query_value(obd.commands.RELATIVE_THROTTLE_POS),
-                    fuel_status=self._query_fuel_status(),
-                    fuel_level_pct=self._query_value(obd.commands.FUEL_LEVEL),
+                    rpm=fresh.get("rpm"),
+                    coolant_c=slow_cache.get("coolant_c"),
+                    speed_kmh=fresh.get("speed_kmh"),
+                    throttle_pct=fresh.get("throttle_pct"),
+                    battery_v=slow_cache.get("battery_v"),
+                    intake_temp_c=slow_cache.get("intake_temp_c"),
+                    relative_throttle_pct=fresh.get("relative_throttle_pct"),
+                    fuel_status=slow_cache.get("fuel_status"),
+                    fuel_level_pct=slow_cache.get("fuel_level_pct"),
                 )
 
-                # A frame where every ECU-sourced PID failed is treated as
-                # an error; a healthy link should answer at least one of
-                # them. Battery voltage is excluded on purpose because it
-                # comes from the adapter, not the ECU.
+                # Dropout detection is based only on *this iteration's fresh*
+                # query attempts (``fresh``), not the displayed snapshot:
+                # cached slow fields hold their last good value indefinitely
+                # by design, so they'd never look "all null" again after the
+                # first success and would mask a real disconnect. Fields
+                # never attempted this iteration simply aren't in ``fresh``,
+                # so a restricted field set (or a slow field waiting its
+                # turn) is never mistaken for a failure. Battery voltage is
+                # excluded on purpose because it comes from the adapter, not
+                # the ECU.
+                queried_fields = [f for f in fresh if f != "battery_v"]
                 ecu_all_null = (
-                    snapshot.rpm is None
-                    and snapshot.coolant_c is None
-                    and snapshot.speed_kmh is None
-                    and snapshot.throttle_pct is None
-                    and snapshot.intake_temp_c is None
-                    and snapshot.relative_throttle_pct is None
-                    and snapshot.fuel_status is None
-                    and snapshot.fuel_level_pct is None
+                    bool(queried_fields)
+                    and all(fresh[f] is None for f in queried_fields)
                 )
                 if ecu_all_null:
                     consecutive_errors += 1
@@ -284,14 +386,23 @@ class OBDModel(QThread):
         (Pi default ``/dev/ttyUSB0``, or an override via
         ``PITELEMETRY_PORT``).
 
+        Why auto-baud (``baudrate=None``) on that port comes first: some
+        ELM327 clones (e.g. the Vgate vLinker FS) don't lock on cleanly when
+        pyserial's baud is forced directly - they need the handshake/reset
+        sequence python-obd runs when it negotiates the baud itself. Forcing
+        a specific rate straight away can produce "Failed to read port" on
+        hardware that connects fine when the baud is left to auto-detect.
+
         Returns ``True`` on success and stashes the live connection on
         ``self._connection``.
         """
         attempts: list[tuple[str | None, int | None]] = []
 
-        # 1. Explicit port first, if it plausibly exists.
+        # 1. Explicit port first, if it plausibly exists. Auto-baud on that
+        #    same port before any forced rate - see the auto-baud note above.
         default_port_exists = os.path.exists(config.DEFAULT_PORT)
         if default_port_exists:
+            attempts.append((config.DEFAULT_PORT, None))
             for baud in config.BAUD_RATES:
                 attempts.append((config.DEFAULT_PORT, baud))
 

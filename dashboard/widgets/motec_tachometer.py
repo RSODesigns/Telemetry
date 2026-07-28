@@ -207,8 +207,8 @@ class MotecTachometer(BaseGauge):
             rect = QRectF(x, y0 + offset_y, led_w, led_h)
 
             # Outer socket bevel
-            painter.setBrush(QColor("#0d0a0a"))
-            painter.setPen(QPen(QColor("#2a1a1e"), 1.0))
+            painter.setBrush(QColor("#0b0b0b"))
+            painter.setPen(QPen(QColor("#252525"), 1.0))
             painter.drawRoundedRect(rect.adjusted(-2, -2, 2, 2), 5, 5)
 
             rpm_val = self.value if self._has_data else 0.0
@@ -236,10 +236,10 @@ class MotecTachometer(BaseGauge):
                 painter.drawLine(QPointF(rect.left() + 3, rect.top() + 2), QPointF(rect.right() - 3, rect.top() + 2))
             else:
                 unlit_grad = QLinearGradient(rect.left(), rect.top(), rect.left(), rect.bottom())
-                unlit_grad.setColorAt(0.0, QColor("#1c1416"))
-                unlit_grad.setColorAt(1.0, QColor("#0f0a0c"))
+                unlit_grad.setColorAt(0.0, QColor("#181818"))
+                unlit_grad.setColorAt(1.0, QColor("#0d0d0d"))
                 painter.setBrush(unlit_grad)
-                painter.setPen(QPen(QColor("#2c1e22"), 1.0))
+                painter.setPen(QPen(QColor("#282828"), 1.0))
                 painter.drawRoundedRect(rect, 3, 3)
 
     def _draw_3d_central_tachometer(self, painter: QPainter, cx: float, cy: float, R: float) -> None:
@@ -250,11 +250,11 @@ class MotecTachometer(BaseGauge):
         # --- 3D Outer Metallic Bezel Ring ---
         outer_bezel_r = R + 14.0
         bezel_grad = QRadialGradient(cx, cy - 30, outer_bezel_r)
-        bezel_grad.setColorAt(0.0, QColor("#2a1820"))
-        bezel_grad.setColorAt(0.85, QColor("#120c10"))
-        bezel_grad.setColorAt(1.0, QColor("#080608"))
+        bezel_grad.setColorAt(0.0, QColor("#212121"))
+        bezel_grad.setColorAt(0.85, QColor("#0f0f0f"))
+        bezel_grad.setColorAt(1.0, QColor("#070707"))
         painter.setBrush(bezel_grad)
-        painter.setPen(QPen(QColor("#3a2028"), 1.5))
+        painter.setPen(QPen(QColor("#2b2b2b"), 1.5))
         painter.drawEllipse(QPointF(cx, cy), outer_bezel_r, outer_bezel_r)
 
         # Bezel Outer Shadow
@@ -263,7 +263,7 @@ class MotecTachometer(BaseGauge):
         painter.drawEllipse(QPointF(cx, cy), outer_bezel_r + 1, outer_bezel_r + 1)
 
         # --- 3D Recessed Track Groove ---
-        painter.setPen(QPen(QColor("#0a0808"), 26.0, Qt.SolidLine, Qt.FlatCap))
+        painter.setPen(QPen(QColor("#080808"), 26.0, Qt.SolidLine, Qt.FlatCap))
         painter.drawArc(arc_rect, int(start_angle * 16), int(-sweep_angle * 16))
 
         # Sector 1: Off-cam Silver (0 to 6.2k)
@@ -324,12 +324,12 @@ class MotecTachometer(BaseGauge):
         # --- 3D RECESSED INNER GAUGE POD CUP -----------------------------
         inner_r = R - 42.0
         pod_grad = QRadialGradient(cx, cy, inner_r)
-        pod_grad.setColorAt(0.0, QColor("#14100e"))
-        pod_grad.setColorAt(0.7, QColor("#0c0a08"))
-        pod_grad.setColorAt(1.0, QColor("#060505"))
+        pod_grad.setColorAt(0.0, QColor("#121212"))
+        pod_grad.setColorAt(0.7, QColor("#0a0a0a"))
+        pod_grad.setColorAt(1.0, QColor("#050505"))
 
         painter.setBrush(pod_grad)
-        painter.setPen(QPen(QColor("#2a1a1e"), 2.0))
+        painter.setPen(QPen(QColor("#252525"), 2.0))
         painter.drawEllipse(QPointF(cx, cy), inner_r, inner_r)
 
         # Inner Sunken Shadow Ring
@@ -350,13 +350,13 @@ class MotecTachometer(BaseGauge):
         painter.drawText(rpm_rect, Qt.AlignCenter, f"{int(rpm_val)}")
 
         painter.setFont(_make_font(9, bold=True, spacing=1.5))
-        painter.setPen(QColor("#8a7070"))
+        painter.setPen(QColor("#7a7a7a"))
         painter.drawText(QRectF(cx - 50, cy - 52, 100, 16), Qt.AlignCenter, "RPM")
 
         # 3D Groove Divider line
-        painter.setPen(QPen(QColor("#080606"), 2.0))
+        painter.setPen(QPen(QColor("#060606"), 2.0))
         painter.drawLine(QPointF(cx - 65, cy - 33), QPointF(cx + 65, cy - 33))
-        painter.setPen(QPen(QColor("#2a1a1e"), 1.0))
+        painter.setPen(QPen(QColor("#252525"), 1.0))
         painter.drawLine(QPointF(cx - 65, cy - 34), QPointF(cx + 65, cy - 34))
 
         # 2. Lap Timer State & Elapsed Time calculation

@@ -56,9 +56,10 @@ class DashboardController(QObject):
     connection_changed = pyqtSignal(object)   # ConnectionState
     message = pyqtSignal(str)                 # diagnostics passthrough
 
-    def __init__(self, force_mock: bool | None = None, parent=None) -> None:
+    def __init__(self, force_mock: bool | None = None,
+                needed_fields: frozenset[str] | None = None, parent=None) -> None:
         super().__init__(parent)
-        self._model = OBDModel(force_mock=force_mock)
+        self._model = OBDModel(force_mock=force_mock, needed_fields=needed_fields)
         self._overheating = False               # cached: only emit on change
         self._last_state: ConnectionState | None = None
 
